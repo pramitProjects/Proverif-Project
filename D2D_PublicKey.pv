@@ -1,0 +1,147 @@
+type skey.
+type pkey.
+free oij: skey.
+free ski: skey[private].
+free skj: skey[private].
+free T_seqi: bitstring.
+free T_seqj: bitstring .
+free g: bitstring.
+free p: bitstring.
+free ID_edi: bitstring[private].
+free ID_edj: bitstring[private].
+free pki: pkey.
+free pkj: pkey.
+
+
+fun pk(skey): pkey.
+
+
+fun aenc(bitstring,pkey): bitstring.
+reduc forall m:bitstring, sk:skey; adec(aenc(m,pk(sk)),sk)=m.
+
+fun hash1(bitstring,bitstring): bitstring.
+reduc forall ID:bitstring, N:bitstring; dehash1(hash1(ID,N),N)=ID.
+
+fun hash(skey,bitstring): bitstring.
+reduc forall s:skey, N:bitstring; dehash(hash(s,N),N)=s.
+
+fun hash2(bitstring,skey): bitstring.
+reduc forall n:bitstring, pri_key:skey; dehash2(hash2(n,pri_key),pk(pri_key))=n.
+
+fun mul(bitstring,bitstring): bitstring.
+
+fun pow(bitstring,bitstring): bitstring.
+reduc forall d:bitstring, i:bitstring; depow(pow(d,i),d)=i.
+
+fun mod(bitstring,bitstring): skey.
+reduc forall g_i:bitstring, o:bitstring; demod(mod(g_i,o),o)=g_i.
+
+
+
+event EDi_sends_params.
+event EDj_verifies_EDi.
+event EDj_sends_params.
+event EDi_verifies_EDj.
+
+free edi_edj: channel.
+free Kij: skey[private].
+
+query  attacker(Kij).
+query event(EDj_verifies_EDi)==>event(EDi_sends_params).
+query event(EDi_verifies_EDj)==>event(EDj_sends_params).
+
+
+let EDi(pkj:pkey, ID_edi:bitstring, ski:skey, ID_edj:bitstring, T_seqi:bitstring, p:bitstring, g:bitstring)=
+
+    (*STEP1 : EDi generates nonce and send parameters as MC1 to EDj*)
+
+    new Ne_i:bitstring;
+    let AID_EDi = aenc(hash1(ID_edi,Ne_i),pkj) in
+        event EDi_sends_params;
+    out(edi_edj,(AID_EDi,Ne_i,T_seqi));
+
+     (*STEP 4: EDI RECEIVES THE PARAMETERS FROM EDJ AND VERIFIES IT*)
+    in(edi_edj,(Ne_j: bitstring,M_enc: bitstring));
+        new i:bitstring;
+        let pub_enc_check = dehash2(M_enc,pkj) in
+        let Ne_concat_check = adec(pub_enc_check,ski) in
+            event EDi_verifies_EDj;
+        let mod_val_check =  dehash(Ne_concat_check,Ne_i) in
+        let pw_check = demod(mod_val_check,p) in
+        let j_check = depow(pw_check,g) in
+
+        let prod = mul(i,j_check) in
+        let g_pow = pow(g,prod) in
+        let Kij = mod(g_pow,p) in
+
+        let pw1 = pow(g,i) in
+        let mod_val1 = mod(pw1,p) in
+        let Ne_concat1 = hash(mod_val1,Ne_j) in
+        let pub_enc1 = aenc(Ne_concat1,pkj) in
+        let M_enc1 = hash2(pub_enc1,ski) in
+        (*STEP 5: EDI SENDS NEW PARAMETERS TO EDJ*)
+            event EDi_sends_params;
+        out(edi_edj,(M_enc1)).
+
+
+
+
+
+
+
+
+
+
+let EDj(pki:pkey, ID_edj:bitstring, skj:skey, ID_edi:bitstring, T_seqj:bitstring, p:bitstring, g:bitstring)=
+
+    (*STEP 2 : receive MC1 from EDi*)
+
+    in(edi_edj,(AID_EDi: bitstring,Ne_i: bitstring,T_seqi: bitstring));
+
+        let temp = adec(AID_EDi,skj) in
+        let ID_edi_check = dehash1(temp,Ne_i) in
+        if ID_edi_check=ID_edi then
+            event EDj_verifies_EDi;
+        new Ne_j:bitstring;
+        new j:bitstring;
+
+        let pw = pow(g,j) in
+        let mod_val = mod(pw,p) in
+        let Ne_concat = hash(mod_val,Ne_i) in
+        let pub_enc = aenc(Ne_concat,pki) in
+        let M_enc = hash2(pub_enc,skj) in
+         event EDj_sends_params;
+        (*STEP 3: EDJ SENDS NEW PARAMETERS TO EDI*)
+        out(edi_edj,(Ne_j,M_enc));
+
+     (*STEP 6: EDJ RECEIVES AND VALIDATES THE PARAMETERS AND BOTH OF THEM HAVE THE COMMON KEY*)
+
+    in(edi_edj,(M_enc1: bitstring));
+
+        let pub_enc1_check = dehash2(M_enc1,pki) in
+        let Ne_concat1_check = adec(pub_enc1_check,skj) in
+            event EDj_verifies_EDi;
+        let mod_val1_check = dehash(Ne_concat1_check,Ne_j) in
+        let pw1_check = demod(mod_val1_check,p) in
+        let i_check = depow(pw1_check,g) in
+
+        let prod1 = mul(i_check,j) in
+        let g_pow1 = pow(g,prod1) in
+        let Kij = mod(g_pow1,p).
+
+    
+
+
+
+process    
+
+    
+    ( (!EDi(pkj, ID_edi, ski, ID_edj, T_seqi, p, g)) | (!EDj(pki, ID_edj, skj, ID_edi, T_seqj, p, g)))
+
+
+
+        
+
+
+
+
